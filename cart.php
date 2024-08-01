@@ -1,6 +1,11 @@
 <?php
 session_start();
 
+if (!isset($_SESSION['username'])) {
+    header('Location: index.php');
+    exit();
+}
+
 $servername = "localhost";
 $db_username = "root";
 $db_password = "";
@@ -14,8 +19,8 @@ if ($conn->connect_error) {
 
 $errors = [];
 $success_message = "";
+$total_price = 0;
 
-// Function to check inventory and confirm purchase
 function check_inventory_and_confirm_purchase($conn, $user_id) {
     global $errors, $success_message;
 
@@ -58,35 +63,43 @@ function check_inventory_and_confirm_purchase($conn, $user_id) {
     }
 
     if (empty($errors)) {
-        // Proceed with purchase and update stock
-        foreach ($cart_items as $item) {
-            $product_id = $item['product_id'];
-            $quantity = $item['quantity'];
-
-            // Deduct stock
-            $sql = "UPDATE products SET stock=stock-? WHERE product_id=?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("ii", $quantity, $product_id);
-            $stmt->execute();
-            $stmt->close();
-        }
-
-        // Clear cart
-        $sql = "DELETE FROM cart WHERE user_id=?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $user_id);
-        $stmt->execute();
-        $stmt->close();
+        // Proceed with purchase and clear cart
+        $sql_clear_cart = "DELETE FROM cart WHERE user_id=?";
+        $stmt_clear_cart = $conn->prepare($sql_clear_cart);
+        $stmt_clear_cart->bind_param("i", $user_id);
+        $stmt_clear_cart->execute();
+        $stmt_clear_cart->close();
 
         $success_message = "Purchase confirmed!";
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirm_purchase'])) {
-    $user_id = $_SESSION['user_id'];
-    check_inventory_and_confirm_purchase($conn, $user_id);
+function remove_item_from_cart($conn, $user_id, $product_id) {
+    $sql = "DELETE FROM cart WHERE user_id=? AND product_id=?";
+    $stmt = $conn->prepare($sql);
+    $stmt->bind_param("ii", $user_id, $product_id);
+    $stmt->execute();
+    $stmt->close();
 }
+
+$user_id = $_SESSION['user_id'];
+if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    if (isset($_POST['confirm_purchase'])) {
+        check_inventory_and_confirm_purchase($conn, $user_id);
+    } elseif (isset($_POST['remove_item'])) {
+        $product_id = $_POST['product_id'];
+        remove_item_from_cart($conn, $user_id, $product_id);
+    }
+}
+
+// Fetch cart items to display
+$sql = "SELECT cart.product_id, products.product_name, cart.quantity, products.price FROM cart JOIN products ON cart.product_id = products.product_id WHERE cart.user_id=?";
+$stmt = $conn->prepare($sql);
+$stmt->bind_param("i", $user_id);
+$stmt->execute();
+$result = $stmt->get_result();
 ?>
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -101,6 +114,23 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirm_purchase'])) {
             align-items: center;
             background-color: #f0f0f0;
             padding: 20px;
+        }
+        nav {
+            width: 100%;
+            background-color: #333;
+            overflow: hidden;
+        }
+        nav a {
+            float: left;
+            display: block;
+            color: #f2f2f2;
+            text-align: center;
+            padding: 14px 16px;
+            text-decoration: none;
+        }
+        nav a:hover {
+            background-color: #ddd;
+            color: black;
         }
         table {
             border-collapse: collapse;
@@ -142,6 +172,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirm_purchase'])) {
     </style>
 </head>
 <body>
+    <nav>
+        <a href="homePage.php">Home</a>
+        <a href="products.php">Products</a>
+        <a href="cart.php">Cart</a>
+    </nav>
     <h1>Cart</h1>
 
     <?php if (!empty($errors)): ?>
@@ -163,24 +198,27 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['confirm_purchase'])) {
             <th>Product ID</th>
             <th>Name</th>
             <th>Quantity</th>
+            <th>Price</th>
+            <th>Action</th>
         </tr>
-        <?php
-        $user_id = $_SESSION['user_id'];
-        $sql = "SELECT cart.product_id, products.product_name, cart.quantity FROM cart JOIN products ON cart.product_id = products.product_id WHERE cart.user_id=?";
-        $stmt = $conn->prepare($sql);
-        $stmt->bind_param("i", $user_id);
-        $stmt->execute();
-        $result = $stmt->get_result();
-
-        while ($row = $result->fetch_assoc()): ?>
+        <?php while ($row = $result->fetch_assoc()): ?>
+            <?php $total_price += $row['quantity'] * $row['price']; ?>
             <tr>
                 <td><?= htmlspecialchars($row['product_id']) ?></td>
                 <td><?= htmlspecialchars($row['product_name']) ?></td>
                 <td><?= htmlspecialchars($row['quantity']) ?></td>
+                <td><?= htmlspecialchars($row['price']) ?></td>
+                <td>
+                    <form method="POST" action="">
+                        <input type="hidden" name="product_id" value="<?= $row['product_id'] ?>">
+                        <button type="submit" name="remove_item">Remove</button>
+                    </form>
+                </td>
             </tr>
         <?php endwhile; ?>
         <?php $stmt->close(); ?>
     </table>
+    <h2>Total Price: <?= $total_price ?></h2>
 
     <form method="POST" action="">
         <button type="submit" name="confirm_purchase">Confirm Purchase</button>
