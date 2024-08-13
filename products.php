@@ -152,7 +152,7 @@ $conn->close();
         <a href="products.php">Products</a>
         <a href="cart.php">Cart</a>
         <?php if ($_SESSION['role'] == 'admin'): ?>
-            <a href="add_product.php">Add Product</a>
+            <a href="admin.php">Add Product</a>
         <?php endif; ?>
     </nav>
     <h1>Products</h1>
