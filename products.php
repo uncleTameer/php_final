@@ -151,6 +151,9 @@ $conn->close();
         <a href="homePage.php">Home</a>
         <a href="products.php">Products</a>
         <a href="cart.php">Cart</a>
+        <?php if ($_SESSION['role'] == 'admin'): ?>
+            <a href="add_product.php">Add Product</a>
+        <?php endif; ?>
     </nav>
     <h1>Products</h1>
     <table>

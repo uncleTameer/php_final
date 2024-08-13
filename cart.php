@@ -74,12 +74,46 @@ function check_inventory_and_confirm_purchase($conn, $user_id) {
     }
 }
 
-function remove_item_from_cart($conn, $user_id, $product_id) {
-    $sql = "DELETE FROM cart WHERE user_id=? AND product_id=?";
+function remove_item_from_cart($conn, $user_id, $product_id, $quantity_to_remove) {
+    // Fetch current quantity from cart
+    $sql = "SELECT quantity FROM cart WHERE user_id=? AND product_id=?";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param("ii", $user_id, $product_id);
     $stmt->execute();
+    $stmt->bind_result($current_quantity);
+    $stmt->fetch();
     $stmt->close();
+
+    if ($quantity_to_remove >= $current_quantity) {
+        // If removing equal or more than current quantity, delete the item
+        $sql_delete = "DELETE FROM cart WHERE user_id=? AND product_id=?";
+        $stmt_delete = $conn->prepare($sql_delete);
+        $stmt_delete->bind_param("ii", $user_id, $product_id);
+        $stmt_delete->execute();
+        $stmt_delete->close();
+
+        // Increase stock by the quantity removed
+        $sql_update_stock = "UPDATE products SET stock=stock+? WHERE product_id=?";
+        $stmt_update_stock = $conn->prepare($sql_update_stock);
+        $stmt_update_stock->bind_param("ii", $current_quantity, $product_id);
+        $stmt_update_stock->execute();
+        $stmt_update_stock->close();
+    } else {
+        // Otherwise, decrease the quantity in the cart
+        $new_quantity = $current_quantity - $quantity_to_remove;
+        $sql_update_cart = "UPDATE cart SET quantity=? WHERE user_id=? AND product_id=?";
+        $stmt_update_cart = $conn->prepare($sql_update_cart);
+        $stmt_update_cart->bind_param("iii", $new_quantity, $user_id, $product_id);
+        $stmt_update_cart->execute();
+        $stmt_update_cart->close();
+
+        // Increase stock by the quantity removed
+        $sql_update_stock = "UPDATE products SET stock=stock+? WHERE product_id=?";
+        $stmt_update_stock = $conn->prepare($sql_update_stock);
+        $stmt_update_stock->bind_param("ii", $quantity_to_remove, $product_id);
+        $stmt_update_stock->execute();
+        $stmt_update_stock->close();
+    }
 }
 
 $user_id = $_SESSION['user_id'];
@@ -88,7 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         check_inventory_and_confirm_purchase($conn, $user_id);
     } elseif (isset($_POST['remove_item'])) {
         $product_id = $_POST['product_id'];
-        remove_item_from_cart($conn, $user_id, $product_id);
+        $quantity_to_remove = $_POST['quantity_to_remove'];
+        remove_item_from_cart($conn, $user_id, $product_id, $quantity_to_remove);
     }
 }
 
@@ -211,6 +246,7 @@ $result = $stmt->get_result();
                 <td>
                     <form method="POST" action="">
                         <input type="hidden" name="product_id" value="<?= $row['product_id'] ?>">
+                        <input type="number" name="quantity_to_remove" value="1" min="1" max="<?= $row['quantity'] ?>">
                         <button type="submit" name="remove_item">Remove</button>
                     </form>
                 </td>

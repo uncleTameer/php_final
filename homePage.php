@@ -62,6 +62,10 @@ $role = $_SESSION['role'];
         <p>This is the home page for the project.</p>
         <p>User Role: <?= htmlspecialchars($role) ?></p>
         <button onclick="window.location.href='products.php'">View Products</button>
+        <?php if ($role == 'admin'): ?>
+            <button onclick="window.location.href='admin.php'">Admin Page</button>
+            <button onclick="window.location.href='admin.php'">Add Product</button>
+        <?php endif; ?>
         <button onclick="window.location.href='index.php?logout=true'">Logout</button>
     </main>
     <?php

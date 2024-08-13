@@ -89,6 +89,12 @@ $conn->close();
         .error {
             color: red;
         }
+        .signup-button {
+            background: #007bff;
+        }
+        .signup-button:hover {
+            background: #0056b3;
+        }
     </style>
 </head>
 <body>
@@ -102,6 +108,7 @@ $conn->close();
         <?php if (isset($error_message)): ?>
             <p class="error"><?= $error_message ?></p>
         <?php endif; ?>
+        <button type="button" class="signup-button" onclick="window.location.href='signup.php'">Sign Up</button>
     </form>
 </body>
 </html>
